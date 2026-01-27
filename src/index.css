@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@theme {
+  /* Paleta Fortuna Dark definida diretamente aqui */
+  --color-bg: #0B0E14;
+  --color-card: #151A23;
+  --color-stroke: #2A3441;
+  --color-primary: #2563EB;
+  --color-accent: #38BDF8;
+  --color-text-main: #F8FAFC;
+  --color-text-muted: #94A3B8;
+  --color-success: #10B981;
+  --color-danger: #EF4444;
+
+  /* Fonte */
+  --font-sans: "Inter", sans-serif;
+}
+
+@layer base {
+  body {
+    /* Aqui usamos as classes geradas automaticamente a partir das variáveis acima */
+    @apply bg-bg text-text-main antialiased selection:bg-accent selection:text-bg;
+  }
+
+  /* Scrollbar customizada */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-bg;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-stroke rounded-full hover:bg-text-muted;
+  }
+}
