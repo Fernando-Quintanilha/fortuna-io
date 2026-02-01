@@ -7,7 +7,7 @@ import {
     onSnapshot,
     serverTimestamp,
     deleteDoc,
-    updateDoc, // <--- Importante
+    updateDoc,
     doc
 } from 'firebase/firestore';
 import {

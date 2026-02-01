@@ -1,10 +1,10 @@
-import { Trash2, ArrowUpCircle, ArrowDownCircle, PieChart, Pencil } from 'lucide-react'; // <--- Import Pencil
+import { Trash2, ArrowUpCircle, ArrowDownCircle, PieChart, Pencil } from 'lucide-react';
 import { Transaction } from '../types';
 
 interface TransactionListProps {
     transactions: Transaction[];
     onDelete: (id: string) => void;
-    onEdit: (transaction: Transaction) => void; // <--- Nova Prop
+    onEdit: (transaction: Transaction) => void;
 }
 
 export function TransactionList({ transactions, onDelete, onEdit }: TransactionListProps) {
@@ -30,54 +30,56 @@ export function TransactionList({ transactions, onDelete, onEdit }: TransactionL
             {transactions.map((t) => (
                 <div
                     key={t.id}
-                    className="group flex items-center justify-between p-4 bg-card border border-stroke rounded-xl hover:border-text-muted/30 transition-all"
+                    className="group flex items-center justify-between p-3 sm:p-4 bg-card border border-stroke rounded-xl hover:border-text-muted/30 transition-all"
                 >
-                    {/* Esquerda: Ícone e Texto */}
-                    <div className="flex items-center gap-4">
-                        <div className={`p-2 rounded-lg ${t.type === 'income' ? 'bg-success/10 text-success' :
+                    <div className="flex items-center gap-3 flex-1 min-w-0 mr-2">
+
+                        {/* Ícone */}
+                        <div className={`p-2 rounded-lg shrink-0 ${t.type === 'income' ? 'bg-success/10 text-success' :
                                 t.type === 'expense' ? 'bg-danger/10 text-danger' :
                                     'bg-accent/10 text-accent'
                             }`}>
-                            {t.type === 'income' ? <ArrowUpCircle size={20} /> :
-                                t.type === 'expense' ? <ArrowDownCircle size={20} /> :
-                                    <PieChart size={20} />}
+                            {t.type === 'income' ? <ArrowUpCircle size={18} /> :
+                                t.type === 'expense' ? <ArrowDownCircle size={18} /> :
+                                    <PieChart size={18} />}
                         </div>
 
-                        <div>
-                            <p className="font-medium text-text-main">{t.description}</p>
-                            <div className="flex items-center gap-2 text-xs text-text-muted">
-                                <span>{t.category}</span>
-                                <span>•</span>
-                                <span>{formatDate(t.date)}</span>
+                        {/* Textos com Truncate (... se for grande demais) */}
+                        <div className="flex flex-col min-w-0">
+                            <p className="font-medium text-text-main truncate text-sm sm:text-base">
+                                {t.description}
+                            </p>
+                            <div className="flex items-center gap-1 text-xs text-text-muted truncate">
+                                <span className="truncate max-w-[80px] sm:max-w-none">{t.category}</span>
+                                <span className="shrink-0">•</span>
+                                <span className="shrink-0">{formatDate(t.date)}</span>
                             </div>
                         </div>
                     </div>
 
-                    {/* Direita: Valor e Botões */}
-                    <div className="flex items-center gap-4">
-                        <span className={`font-semibold ${t.type === 'income' ? 'text-success' : 'text-text-main'
+                    <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                        <span className={`font-semibold whitespace-nowrap text-sm sm:text-base ${t.type === 'income' ? 'text-success' : 'text-text-main'
                             }`}>
-                            {t.type === 'income' ? '+ ' : '- '}
+                            {t.type === 'income' ? '+ ' : t.type === 'expense' ? '- ' : ''}
                             {formatCurrency(t.amount)}
                         </span>
 
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                            {/* Botão Editar */}
+                        {/* Botões: Visíveis sempre no Mobile, Hover no PC */}
+                        <div className="flex gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity opacity-100">
                             <button
-                                onClick={() => onEdit(t)} // <--- Chama o edit
-                                className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                                onClick={() => onEdit(t)}
+                                className="p-1.5 sm:p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
                                 title="Editar"
                             >
-                                <Pencil size={18} />
+                                <Pencil size={16} />
                             </button>
 
-                            {/* Botão Excluir */}
                             <button
                                 onClick={() => onDelete(t.id)}
-                                className="p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-lg transition-all"
+                                className="p-1.5 sm:p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-lg transition-all"
                                 title="Excluir"
                             >
-                                <Trash2 size={18} />
+                                <Trash2 size={16} />
                             </button>
                         </div>
                     </div>

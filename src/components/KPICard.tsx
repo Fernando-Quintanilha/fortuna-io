@@ -17,7 +17,6 @@ export function KPICard({ title, amount, icon: Icon, variant = 'default' }: KPIC
         }).format(value);
     };
 
-    // Mapeamento de estilos baseados na variante escolhida
     const variants = {
         default: 'text-text-main bg-primary/10 border-primary/20', // Azul (Saldo)
         success: 'text-success bg-success/10 border-success/20',    // Verde (Entradas)
@@ -35,7 +34,6 @@ export function KPICard({ title, amount, icon: Icon, variant = 'default' }: KPIC
                     </h3>
                 </div>
 
-                {/* Ícone com fundo colorido dinâmico */}
                 <div className={`p-3 rounded-xl border ${variants[variant]}`}>
                     <Icon size={24} />
                 </div>

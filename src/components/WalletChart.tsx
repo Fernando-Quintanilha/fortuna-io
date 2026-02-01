@@ -27,7 +27,6 @@ export function WalletChart({ transactions }: WalletChartProps) {
 
     }, [transactions]);
 
-    // Cores "Tech" para Investimentos (Roxo, Ciano, Emerald)
     const COLORS = ['#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#EC4899', '#6366F1'];
 
     const formatCurrency = (value: number) =>

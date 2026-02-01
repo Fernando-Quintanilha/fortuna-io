@@ -1,13 +1,12 @@
 import { LayoutDashboard, ArrowRightLeft, Wallet, Settings, LogOut, User as UserIcon } from 'lucide-react';
 import { useFinanceiro } from '../hooks/useFinanceiro';
 import { signInWithGoogle, logout } from '../services/auth';
-import { Link, useLocation } from 'react-router-dom'; // <--- Importante
+import { Link, useLocation } from 'react-router-dom'; 
 
 export function Sidebar() {
   const { user } = useFinanceiro();
-  const location = useLocation(); // Hook para saber a URL atual
+  const location = useLocation();
 
-  // Adicionamos a propriedade 'path'
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
     { icon: ArrowRightLeft, label: 'Transações', path: '/transactions' },
@@ -26,7 +25,6 @@ export function Sidebar() {
 
       <nav className="flex-1 space-y-2">
         {menuItems.map((item) => {
-          // Lógica de Ativo: Se o path for igual ao pathname atual
           const isActive = location.pathname === item.path;
 
           return (
@@ -46,7 +44,6 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer do Usuário (Mesmo código de antes...) */}
       <div className="pt-6 border-t border-stroke">
         {user && !user.isAnonymous ? (
           <div className="space-y-3">

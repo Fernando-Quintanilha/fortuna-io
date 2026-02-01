@@ -30,12 +30,10 @@ export function ExpensesChart({ transactions }: ExpensesChartProps) {
 
     const COLORS = ['#38BDF8', '#2563EB', '#818CF8', '#F472B6', '#34D399', '#FBBF24'];
 
-    // CORREÇÃO 1: Nome da função corrigido (estava intformatCurrency)
     const formatCurrency = (value: number) =>
         new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
     if (data.length === 0) {
-        // CORREÇÃO 2: Altura responsiva (h-80 no mobile, h-[300px] no desktop)
         return (
             <div className="bg-card border border-stroke rounded-2xl p-6 h-80 md:h-[300px] flex items-center justify-center text-text-muted">
                 <p>Sem despesas para exibir gráfico.</p>
@@ -44,7 +42,6 @@ export function ExpensesChart({ transactions }: ExpensesChartProps) {
     }
 
     return (
-        // CORREÇÃO 2: Altura responsiva (h-80 no mobile, h-[400px] no desktop)
         <div className="bg-card border border-stroke rounded-2xl p-6 h-80 md:h-[400px] flex flex-col shadow-lg">
             <h3 className="text-xl font-bold text-text-main mb-4">Despesas por Categoria</h3>
 
@@ -66,7 +63,6 @@ export function ExpensesChart({ transactions }: ExpensesChartProps) {
                             ))}
                         </Pie>
                         <Tooltip
-                            // CORREÇÃO 3: Casting seguro para Number() para acalmar o TypeScript
                             formatter={(value) => formatCurrency(Number(value))}
                             contentStyle={{ backgroundColor: '#151A23', borderColor: '#2A3441', color: '#F8FAFC' }}
                             itemStyle={{ color: '#F8FAFC' }}

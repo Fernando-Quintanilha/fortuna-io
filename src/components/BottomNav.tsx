@@ -37,7 +37,6 @@ export function BottomNav() {
                     );
                 })}
 
-                {/* Botão de Usuário (Mantém igual) */}
                 {user && !user.isAnonymous ? (
                     <button onClick={logout} className="flex flex-col items-center justify-center gap-1 w-16">
                         <div className="p-0.5 rounded-full border-2 border-primary/20">

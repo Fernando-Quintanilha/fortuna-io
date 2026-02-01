@@ -13,7 +13,6 @@ interface NewTransactionModalProps {
     transactionToEdit?: Transaction | null;
 }
 
-// Categorias de DESPESAS
 const EXPENSE_CATEGORIES = [
     { id: 'alimentacao', label: 'Alimentação', icon: Utensils },
     { id: 'lazer', label: 'Lazer', icon: Gamepad2 },
@@ -27,7 +26,6 @@ const EXPENSE_CATEGORIES = [
     { id: 'outros', label: 'Outros', icon: MoreHorizontal },
 ];
 
-// Categorias de INVESTIMENTOS (Novidade!)
 const INVESTMENT_CATEGORIES = [
     { id: 'acoes', label: 'Ações', icon: TrendingUp },
     { id: 'fiis', label: 'FIIs', icon: Building2 },
@@ -110,7 +108,6 @@ export function NewTransactionModal({ isOpen, onClose, transactionToEdit }: NewT
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
 
-                    {/* Tipo */}
                     <div className="grid grid-cols-3 gap-2 p-1 bg-bg rounded-xl border border-stroke">
                         {(['income', 'expense', 'investment'] as const).map((t) => (
                             <button
@@ -129,7 +126,6 @@ export function NewTransactionModal({ isOpen, onClose, transactionToEdit }: NewT
                         ))}
                     </div>
 
-                    {/* Valor e Data */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="amount" className="block text-sm font-medium text-text-muted mb-1">Valor Aplicado (R$)</label>
@@ -149,7 +145,6 @@ export function NewTransactionModal({ isOpen, onClose, transactionToEdit }: NewT
                         </div>
                     </div>
 
-                    {/* Categoria Dinâmica */}
                     <div>
                         <label className="block text-sm font-medium text-text-muted mb-3">
                             {type === 'investment' ? 'Tipo de Ativo' : 'Categoria'}
