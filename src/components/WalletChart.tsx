@@ -1,18 +1,18 @@
 import { useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { Transaction } from '../types';
+import { usePrivacy } from '../contexts/PrivacyContext'; // <--- Importei o Contexto
 
 interface WalletChartProps {
     transactions: Transaction[];
 }
 
 export function WalletChart({ transactions }: WalletChartProps) {
+    const { isVisible } = usePrivacy(); // <--- Pegamos o estado do "olhinho"
 
     const data = useMemo(() => {
-        // Filtra apenas Investimentos
         const investments = transactions.filter(t => t.type === 'investment');
 
-        // Agrupa por Categoria (Ações, FIIs, etc)
         const grouped = investments.reduce((acc, curr) => {
             const category = curr.category;
             const amount = Number(curr.amount);
@@ -59,7 +59,8 @@ export function WalletChart({ transactions }: WalletChartProps) {
                             ))}
                         </Pie>
                         <Tooltip
-                            formatter={(value) => formatCurrency(Number(value))}
+                            //Se isVisible for false, mostra as bolinhas
+                            formatter={(value) => isVisible ? formatCurrency(Number(value)) : '••••••'}
                             contentStyle={{ backgroundColor: '#151A23', borderColor: '#2A3441', color: '#F8FAFC' }}
                             itemStyle={{ color: '#F8FAFC' }}
                         />

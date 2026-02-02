@@ -1,5 +1,6 @@
 import { Trash2, ArrowUpCircle, ArrowDownCircle, PieChart, Pencil } from 'lucide-react';
 import { Transaction } from '../types';
+import { SecureValue } from './SecureValue';
 
 interface TransactionListProps {
     transactions: Transaction[];
@@ -36,8 +37,8 @@ export function TransactionList({ transactions, onDelete, onEdit }: TransactionL
 
                         {/* Ícone */}
                         <div className={`p-2 rounded-lg shrink-0 ${t.type === 'income' ? 'bg-success/10 text-success' :
-                                t.type === 'expense' ? 'bg-danger/10 text-danger' :
-                                    'bg-accent/10 text-accent'
+                            t.type === 'expense' ? 'bg-danger/10 text-danger' :
+                                'bg-accent/10 text-accent'
                             }`}>
                             {t.type === 'income' ? <ArrowUpCircle size={18} /> :
                                 t.type === 'expense' ? <ArrowDownCircle size={18} /> :
@@ -60,8 +61,7 @@ export function TransactionList({ transactions, onDelete, onEdit }: TransactionL
                     <div className="flex items-center gap-2 sm:gap-4 shrink-0">
                         <span className={`font-semibold whitespace-nowrap text-sm sm:text-base ${t.type === 'income' ? 'text-success' : 'text-text-main'
                             }`}>
-                            {t.type === 'income' ? '+ ' : t.type === 'expense' ? '- ' : ''}
-                            {formatCurrency(t.amount)}
+                            <SecureValue value={t.amount} prefix={t.type === 'expense' ? '- R$ ' : '+ R$ '} />
                         </span>
 
                         {/* Botões: Visíveis sempre no Mobile, Hover no PC */}
