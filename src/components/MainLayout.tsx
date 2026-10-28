@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Sidebar } from './Sidebar';
+import { Sidebar, Logo } from './Sidebar';
 import { BottomNav } from './BottomNav';
 
 interface MainLayoutProps {
@@ -8,11 +8,14 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
     return (
-        <div className="min-h-screen bg-bg flex text-text-main">
+        <div className="flex min-h-screen text-text-main">
             <Sidebar />
 
-            <main className="flex-1 md:ml-64 transition-all w-full">
-                <div className="p-6 pb-24 md:p-10 max-w-7xl mx-auto">
+            <main className="w-full flex-1 md:ml-64">
+                <div className="flex items-center justify-between px-4 pt-5 md:hidden">
+                    <Logo />
+                </div>
+                <div className="mx-auto max-w-7xl px-4 pb-28 pt-6 md:px-10 md:pb-12 md:pt-10">
                     {children}
                 </div>
             </main>

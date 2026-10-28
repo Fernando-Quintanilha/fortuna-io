@@ -1,77 +1,92 @@
-import { LayoutDashboard, ArrowRightLeft, Wallet, Settings, LogOut, User as UserIcon } from 'lucide-react';
+import { LogOut, User as UserIcon, Eye, EyeOff } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import { useFinanceiro } from '../hooks/useFinanceiro';
+import { usePrivacy } from '../contexts/PrivacyContext';
 import { signInWithGoogle, logout } from '../services/auth';
-import { Link, useLocation } from 'react-router-dom'; 
+import { MENU_ITEMS } from '../constants/menu';
+
+export function Logo() {
+    return (
+        <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/40 bg-primary/10 font-mono text-sm font-semibold text-primary shadow-[0_0_18px_-4px_rgb(198_241_53/0.6)]">
+                F<span className="animate-pulse">_</span>
+            </div>
+            <h1 className="font-mono text-lg font-semibold tracking-tight text-text-main">
+                fortuna<span className="text-primary">.io</span>
+            </h1>
+        </div>
+    );
+}
 
 export function Sidebar() {
-  const { user } = useFinanceiro();
-  const location = useLocation();
+    const { user } = useFinanceiro();
+    const { isVisible, toggleVisibility } = usePrivacy();
+    const location = useLocation();
 
-  const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-    { icon: ArrowRightLeft, label: 'Transações', path: '/transactions' },
-    { icon: Wallet, label: 'Carteira', path: '/wallet' },
-    { icon: Settings, label: 'Ajustes', path: '/settings' },
-  ];
-
-  return (
-    <aside className="hidden md:flex w-64 flex-col fixed left-0 top-0 h-screen bg-card border-r border-stroke p-6 transition-all z-50">
-      <div className="flex items-center gap-3 mb-10">
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(37,99,235,0.5)]">
-          <span className="font-bold text-lg text-white">F</span>
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight text-text-main">Fortuna</h1>
-      </div>
-
-      <nav className="flex-1 space-y-2">
-        {menuItems.map((item) => {
-          const isActive = location.pathname === item.path;
-
-          return (
-            <Link
-              key={item.label}
-              to={item.path}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group
-                ${isActive
-                  ? 'bg-primary/10 text-primary border border-primary/20 shadow-[0_0_10px_rgba(37,99,235,0.1)]'
-                  : 'text-text-muted hover:bg-stroke hover:text-text-main'
-                }`}
-            >
-              <item.icon size={20} className={isActive ? 'text-primary' : 'text-text-muted group-hover:text-text-main'} />
-              <span className="font-medium">{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="pt-6 border-t border-stroke">
-        {user && !user.isAnonymous ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-3 p-2 rounded-lg bg-bg/50 border border-stroke">
-              {user.photoURL ? (
-                <img src={user.photoURL} alt="User" className="w-9 h-9 rounded-full border border-stroke" />
-              ) : (
-                <div className="w-9 h-9 rounded-full bg-stroke flex items-center justify-center text-text-muted">
-                  <UserIcon size={18} />
-                </div>
-              )}
-              <div className="flex flex-col overflow-hidden">
-                <span className="text-sm font-medium text-text-main truncate" title={user.displayName || ''}>
-                  {user.displayName?.split(' ')[0]}
-                </span>
-                <span className="text-[10px] text-text-muted truncate">Premium</span>
-              </div>
+    return (
+        <aside className="fixed left-0 top-0 z-50 hidden h-screen w-64 flex-col border-r border-white/[0.06] bg-bg/70 p-5 backdrop-blur-xl md:flex">
+            <div className="mb-10 px-2 pt-1">
+                <Logo />
             </div>
-            <button onClick={logout} className="w-full flex items-center justify-center gap-2 text-xs font-medium text-danger hover:bg-danger/10 py-2 rounded-lg transition-colors">
-              <LogOut size={14} /> Sair
+
+            <p className="label-mono mb-3 px-3">menu</p>
+            <nav className="flex-1 space-y-1">
+                {MENU_ITEMS.map((item) => {
+                    const isActive = location.pathname === item.path;
+                    return (
+                        <Link
+                            key={item.path}
+                            to={item.path}
+                            className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all
+                                ${isActive
+                                    ? 'bg-white/[0.05] text-text-main'
+                                    : 'text-text-muted hover:bg-white/[0.03] hover:text-text-main'}`}
+                        >
+                            {isActive && <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-primary shadow-[0_0_10px_rgb(198_241_53/0.8)]" />}
+                            <item.icon size={18} className={isActive ? 'text-primary' : ''} />
+                            <span className="flex-1 font-medium">{item.label}</span>
+                            <span className="font-mono text-[10px] text-text-dim">{item.hotkey}</span>
+                        </Link>
+                    );
+                })}
+            </nav>
+
+            <button
+                onClick={toggleVisibility}
+                className="mb-4 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-text-muted transition-colors hover:bg-white/[0.03] hover:text-text-main cursor-pointer"
+            >
+                {isVisible ? <Eye size={18} /> : <EyeOff size={18} />}
+                <span className="flex-1 text-left font-medium">{isVisible ? 'Ocultar valores' : 'Mostrar valores'}</span>
             </button>
-          </div>
-        ) : (
-          <button onClick={signInWithGoogle} className="w-full bg-text-main hover:bg-gray-200 text-bg font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 text-sm">
-            Entrar
-          </button>
-        )}
-      </div>
-    </aside>
-  );
+
+            <div className="border-t border-white/[0.06] pt-4">
+                {user && !user.isAnonymous ? (
+                    <div className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2">
+                        {user.photoURL ? (
+                            <img src={user.photoURL} alt="" className="h-9 w-9 rounded-lg" />
+                        ) : (
+                            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-stroke text-text-muted">
+                                <UserIcon size={18} />
+                            </div>
+                        )}
+                        <div className="flex min-w-0 flex-1 flex-col">
+                            <span className="truncate text-sm font-medium text-text-main" title={user.displayName || ''}>
+                                {user.displayName?.split(' ')[0]}
+                            </span>
+                            <span className="flex items-center gap-1 font-mono text-[10px] text-success">
+                                <span className="h-1.5 w-1.5 rounded-full bg-success" /> online
+                            </span>
+                        </div>
+                        <button onClick={logout} title="Sair" className="rounded-lg p-2 text-text-muted transition-colors hover:bg-danger/10 hover:text-danger cursor-pointer">
+                            <LogOut size={16} />
+                        </button>
+                    </div>
+                ) : (
+                    <button onClick={signInWithGoogle} className="btn-primary w-full">
+                        Entrar com Google
+                    </button>
+                )}
+            </div>
+        </aside>
+    );
 }

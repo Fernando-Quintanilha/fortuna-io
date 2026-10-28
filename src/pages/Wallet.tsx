@@ -1,25 +1,21 @@
 import { useState, useMemo } from 'react';
+import { PlusCircle, TrendingUp } from 'lucide-react';
 import { useFinanceiro } from '../hooks/useFinanceiro';
 import { TransactionList } from '../components/TransactionList';
 import { NewTransactionModal } from '../components/NewTransactionModal';
 import { WalletChart } from '../components/WalletChart';
-import { SecureValue } from '../components/SecureValue'; // <--- Importei o Componente Seguro
+import { SecureValue } from '../components/SecureValue';
+import { Panel } from '../components/ui/Panel';
+import { PageHeader } from '../components/ui/PageHeader';
 import { Transaction } from '../types';
-import { Wallet as WalletIcon, TrendingUp, PlusCircle } from 'lucide-react';
 
 export function Wallet() {
-    const { transactions, deleteTransaction, editTransaction } = useFinanceiro();
+    const { transactions, deleteTransaction } = useFinanceiro();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
-    // Filtra apenas Investimentos
-    const investments = useMemo(() => {
-        return transactions.filter(t => t.type === 'investment');
-    }, [transactions]);
-
-    const totalInvested = useMemo(() => {
-        return investments.reduce((acc, curr) => acc + curr.amount, 0);
-    }, [investments]);
+    const investments = useMemo(() => transactions.filter(t => t.type === 'investment'), [transactions]);
+    const totalInvested = useMemo(() => investments.reduce((acc, curr) => acc + curr.amount, 0), [investments]);
 
     function handleEdit(transaction: Transaction) {
         setEditingTransaction(transaction);
@@ -31,66 +27,49 @@ export function Wallet() {
     }
 
     return (
-        <div className="animate-in fade-in duration-500 pb-20 md:pb-0 space-y-6">
+        <div className="animate-enter space-y-6">
+            <PageHeader
+                eyebrow="carteira"
+                title="Minha carteira"
+                subtitle="Valor aplicado por classe de ativo."
+                actions={<button onClick={handleCreate} className="btn-primary"><PlusCircle size={16} /> Novo aporte</button>}
+            />
 
-            <header className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+            <div className="glass relative flex items-center justify-between overflow-hidden p-6 md:p-8">
+                <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-accent/15 blur-3xl" />
                 <div>
-                    <h2 className="text-3xl font-bold text-text-main flex items-center gap-2">
-                        <WalletIcon className="text-accent" /> Minha Carteira
-                    </h2>
-                    <p className="text-text-muted mt-1">Gerencie seus ativos e acompanhe a evolução (Valor Aplicado)</p>
-                </div>
-
-                <button
-                    onClick={handleCreate}
-                    className="bg-accent hover:bg-cyan-600 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-[0_4px_20px_rgba(6,182,212,0.25)] active:scale-95 flex items-center gap-2 cursor-pointer"
-                >
-                    <PlusCircle size={20} />
-                    <span>Novo Aporte</span>
-                </button>
-            </header>
-
-            <div className="bg-gradient-to-r from-card to-bg border border-stroke rounded-2xl p-6 md:p-8 flex items-center justify-between shadow-lg">
-                <div>
-                    <p className="text-text-muted font-medium mb-1">Patrimônio Total Aplicado</p>
-                    <h3 className="text-4xl font-bold text-text-main tracking-tight">
+                    <p className="label-mono mb-2">patrimônio aplicado</p>
+                    <p className="font-mono text-4xl font-semibold tracking-tight md:text-5xl">
                         <SecureValue value={totalInvested} />
-                    </h3>
+                    </p>
                 </div>
-                <div className="hidden md:flex h-16 w-16 bg-accent/10 rounded-full items-center justify-center text-accent">
-                    <TrendingUp size={32} />
+                <div className="hidden h-14 w-14 items-center justify-center rounded-2xl border border-accent/30 bg-accent/10 text-accent md:flex">
+                    <TrendingUp size={26} />
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-                <div className="lg:col-span-1">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                <Panel title="alocação" className="lg:col-span-1">
                     <WalletChart transactions={transactions} />
-                </div>
+                </Panel>
 
-                <div className="lg:col-span-2 bg-card border border-stroke rounded-2xl p-6 min-h-[400px]">
-                    <h3 className="text-xl font-bold text-text-main mb-6">Histórico de Aportes</h3>
+                <Panel title="histórico de aportes" className="lg:col-span-2">
                     {investments.length > 0 ? (
-                        <TransactionList
-                            transactions={investments}
-                            onDelete={deleteTransaction}
-                            onEdit={handleEdit}
-                        />
+                        <TransactionList transactions={investments} onDelete={deleteTransaction} onEdit={handleEdit} />
                     ) : (
-                        <div className="flex flex-col items-center justify-center h-48 text-text-muted border-2 border-dashed border-stroke rounded-xl">
-                            <p>Nenhum ativo na carteira ainda.</p>
-                            <button onClick={handleCreate} className="text-accent hover:underline mt-2 text-sm">
-                                Fazer primeiro aporte
-                            </button>
+                        <div className="flex h-48 flex-col items-center justify-center rounded-xl border border-dashed border-stroke font-mono text-sm text-text-muted">
+                            <p>&gt; nenhum ativo na carteira ainda_</p>
+                            <button onClick={handleCreate} className="mt-2 text-accent hover:underline cursor-pointer">fazer primeiro aporte</button>
                         </div>
                     )}
-                </div>
+                </Panel>
             </div>
 
             <NewTransactionModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 transactionToEdit={editingTransaction}
+                defaultType="investment"
             />
         </div>
     );
