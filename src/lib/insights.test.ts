@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Transaction } from '../types';
-import { buildAlerts, categoryBreakdown, cumulativeDaily, detectRecurring, monthlySeries, monthTotals, topMerchants } from './insights';
+import { buildAlerts, categoryBreakdown, cumulativeDaily, detectRecurring, monthlySeries, monthTotals, spendingRoom, topMerchants } from './insights';
 
 const tx = (date: string, amount: number, patch: Partial<Transaction> = {}): Transaction => ({ id: date, date, amount,
     description: 'Netflix', type: 'expense', category: 'Assinaturas', ...patch });
@@ -44,10 +44,45 @@ describe('relatórios', () => {
         expect(monthTotals(txs, '2026-10').balance).toBe(55);
     });
     it('emite alertas em português e não projeta lançamentos futuros', () => {
-        const txs = [tx('2026-07-01', 100), tx('2026-08-01', 100), tx('2026-09-01', 100), tx('2026-10-01', 170)];
+        const txs = [tx('2026-07-01', 1000), tx('2026-08-01', 1000), tx('2026-09-01', 1000), tx('2026-10-01', 1700)];
         const alertas = buildAlerts(txs, '2026-10', '2026-10-15');
         expect(alertas.map(a => a.level)).toEqual(['critical', 'warning', 'critical']);
         expect(alertas[0].detail).toContain('R$');
         expect(buildAlerts([tx('2026-10-30', 100)], '2026-10', '2026-10-01').some(a => a.title.includes('Projeção'))).toBe(false);
+    });
+});
+
+describe('investido líquido e quanto dá pra gastar', () => {
+    it('ignora aumento percentual sobre valor pequeno e só é crítico com diferença relevante', () => {
+        const pequeno = [tx('2026-07-01', 5), tx('2026-08-01', 5), tx('2026-09-01', 10), tx('2026-10-01', 15)];
+        expect(buildAlerts(pequeno, '2026-10', '2026-10-31').some(a => a.title.startsWith('Aumento'))).toBe(false);
+        const medio = [tx('2026-09-01', 300), tx('2026-10-01', 200)];
+        expect(buildAlerts(medio, '2026-10', '2026-10-31').find(a => a.title.startsWith('Aumento'))?.level).toBe('warning');
+    });
+    it('desconta resgates do investido: aplicar e resgatar no mesmo mês não pesa no saldo', () => {
+        const txs = [tx('2026-10-01', 1000, { type: 'income', category: 'Salário' }),
+            tx('2026-10-15', 2970, { type: 'investment', category: 'Renda Fixa' }),
+            tx('2026-10-15', 2970, { type: 'transfer', category: 'Resgate de investimento' }),
+            tx('2026-10-20', 500, { type: 'transfer', category: 'Resgate de investimento' })];
+        expect(monthTotals(txs, '2026-10')).toEqual({ income: 1000, expense: 0, invested: -500, balance: 1500 });
+    });
+    it('desconta contas recorrentes que ainda não caíram e soma receitas recorrentes previstas', () => {
+        const txs = [
+            tx('2026-08-05', 3000, { type: 'income', category: 'Salário', description: 'Salario Empresa X' }),
+            tx('2026-09-05', 3000, { type: 'income', category: 'Salário', description: 'Salario Empresa X' }),
+            tx('2026-08-10', 120, { description: 'Vivo Fibra', category: 'Casa/Contas' }),
+            tx('2026-09-10', 120, { description: 'Vivo Fibra', category: 'Casa/Contas' }),
+            tx('2026-08-02', 40, { description: 'Netflix' }), tx('2026-09-02', 40, { description: 'Netflix' }),
+            tx('2026-10-02', 40, { description: 'Netflix' }),
+            tx('2026-10-03', 500, { type: 'income', category: 'Pix recebido', description: 'Freela' }),
+            tx('2026-10-04', 200, { description: 'Mercado', category: 'Mercado' }),
+        ];
+        const room = spendingRoom(txs, '2026-10', '2026-10-22');
+        expect(room.pendingBills.map(c => c.label)).toEqual(['Vivo Fibra']);
+        expect(room.pendingIncome.map(c => c.amount)).toEqual([3000]);
+        expect(room.available).toBe(500 - 240 - 120 + 3000);
+        expect(room.daysLeft).toBe(10);
+        expect(room.perDay).toBe(314);
+        expect(spendingRoom(txs, '2026-09', '2026-10-22').daysLeft).toBe(0);
     });
 });

@@ -42,10 +42,14 @@ export function normalizeText(raw: string) {
 
 // Chave do estabelecimento: texto normalizado sem prefixos de banco, até 3 palavras
 export function merchantKey(raw: string) {
+    return merchantText(raw).split(' ').slice(0, 3).join(' ');
+}
+
+// Texto do estabelecimento completo: normalizado, sem prefixos de banco, palavras de 2+ letras
+export function merchantText(raw: string) {
     let s = normalizeText(raw);
     for (const p of PREFIXES) s = s.replace(p, '');
-    s = s.replace(/\*/g, ' ').replace(/\s+/g, ' ').trim();
-    return s.split(' ').filter(w => w.length > 1).slice(0, 3).join(' ');
+    return s.replace(/\*/g, ' ').split(/\s+/).filter(w => w.length > 1).join(' ');
 }
 
 const STOPWORDS = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'no', 'na', 'com', 'para', 'por', 'ltda', 'sa', 'me', 'eireli', 'br', 'brasil']);

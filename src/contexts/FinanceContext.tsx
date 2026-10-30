@@ -10,13 +10,20 @@ import { toTransactionData } from '../lib/import/prepare';
 import type { ImportRow } from '../lib/import/prepare';
 import { categoriesFor } from '../lib/categories';
 import { parseDate } from '../lib/import/text';
+import { loadIdentity, saveIdentity } from '../lib/identity';
+import type { Identity } from '../lib/identity';
 
 interface FinanceValue {
     user: User | null; transactions: Transaction[]; summary: FinancialSummary; loading: boolean;
     classifier: Classifier;
+    // Titular (nome e CPF mascarado): reconhece Pix entre as próprias contas
+    identity: Identity;
+    setIdentity(identity: Identity): void;
     addTransaction(t: Omit<Transaction, 'id' | 'createdAt'>): Promise<void>;
     editTransaction(id: string, t: Partial<Transaction>): Promise<void>;
     deleteTransaction(id: string): Promise<void>;
+    // Recategoriza em lote; cada grupo (ex.: as duas pontas de uma transferência) é gravado no mesmo commit
+    recategorize(groups: { id: string; type: Transaction['type']; category: string }[][]): Promise<number>;
     importTransactions(rows: ImportRow[], onProgress?: (done: number, total: number) => void): Promise<number>;
 }
 const FinanceContext = createContext<FinanceValue | undefined>(undefined);
@@ -35,6 +42,7 @@ export function FinanceProvider({ children }: { children: ReactNode }): JSX.Elem
     const [carregando, setCarregando] = useState(true);
     const [operacoes, setOperacoes] = useState(0);
     const usuarioAtual = useRef<string | null>(null);
+    const [identidadeSalva, setIdentidadeSalva] = useState<Identity>({});
 
     useEffect(() => {
         let cancelarExtrato: (() => void) | undefined;
@@ -45,6 +53,7 @@ export function FinanceProvider({ children }: { children: ReactNode }): JSX.Elem
             cancelarExtrato = undefined;
             usuarioAtual.current = u?.uid ?? null;
             setUser(u); setTransactions([]); setCarregando(Boolean(u));
+            setIdentidadeSalva(u ? loadIdentity(u.uid) : {});
             if (!u) return;
             const q = query(transactionsCollection, where('uid', '==', u.uid), orderBy('date', 'desc'), orderBy('createdAt', 'desc'));
             cancelarExtrato = onSnapshot(q, snapshot => {
@@ -61,6 +70,12 @@ export function FinanceProvider({ children }: { children: ReactNode }): JSX.Elem
     }, []);
 
     const classifier = useMemo(() => Classifier.train(transactions), [transactions]);
+    const identity = useMemo<Identity>(() => ({ ...identidadeSalva, name: identidadeSalva.name || user?.displayName || undefined }), [identidadeSalva, user]);
+    function setIdentity(nova: Identity) {
+        if (!user) return;
+        saveIdentity(user.uid, nova);
+        setIdentidadeSalva(nova);
+    }
     const summary = useMemo<FinancialSummary>(() => {
         const resumo = { totalBalance: 0, totalIncome: 0, totalExpense: 0, totalInvested: 0 };
         for (const t of transactions) {
@@ -109,6 +124,32 @@ export function FinanceProvider({ children }: { children: ReactNode }): JSX.Elem
         if (!Object.keys(patch).length) return;
         await executar(() => updateDoc(doc(db, 'transactions', id), { ...patch }));
     }
+    async function recategorize(groups: { id: string; type: Transaction['type']; category: string }[][]): Promise<number> {
+        const uid = exigirUsuario();
+        const grupos = groups.map(g => g.map(item => {
+            const atual = exigirTransacao(item.id);
+            validar({ ...atual, type: item.type, category: item.category });
+            return item;
+        }));
+        if (grupos.some(g => g.length > 450)) throw new Error('Grupo grande demais para gravar de uma vez.');
+        const lotes: typeof grupos[] = [];
+        for (const g of grupos) {
+            const ultimo = lotes[lotes.length - 1];
+            if (ultimo && ultimo.flat().length + g.length <= 450) ultimo.push(g); else lotes.push([g]);
+        }
+        return executar(async () => {
+            let feitos = 0;
+            for (const lote of lotes) {
+                if (exigirUsuario() !== uid) throw new Error('A conta mudou durante a correção.');
+                const batch = writeBatch(db);
+                // 'rule': correção automática não vira treino do modelo
+                for (const item of lote.flat()) batch.update(doc(db, 'transactions', item.id), { type: item.type, category: item.category, categorySource: 'rule' });
+                await batch.commit();
+                feitos += lote.flat().length;
+            }
+            return feitos;
+        });
+    }
     async function deleteTransaction(id: string): Promise<void> {
         exigirTransacao(id);
         await executar(() => deleteDoc(doc(db, 'transactions', id)));
@@ -138,7 +179,7 @@ export function FinanceProvider({ children }: { children: ReactNode }): JSX.Elem
         });
     }
     return <FinanceContext.Provider value={{ user, transactions, summary, loading: carregando || operacoes > 0,
-        classifier, addTransaction, editTransaction, deleteTransaction, importTransactions }}>{children}</FinanceContext.Provider>;
+        classifier, identity, setIdentity, addTransaction, editTransaction, deleteTransaction, recategorize, importTransactions }}>{children}</FinanceContext.Provider>;
 }
 
 export function useFinanceContext(): FinanceValue {

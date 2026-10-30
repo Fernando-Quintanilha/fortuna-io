@@ -11,7 +11,11 @@ import { CategoryBars } from '../components/charts/CategoryBars';
 import { useFinanceiro } from '../hooks/useFinanceiro';
 import { Transaction } from '../types';
 import { monthKey, monthLabel, shiftMonth } from '../lib/format';
-import { monthTotals, categoryBreakdown, monthlySeries, buildAlerts } from '../lib/insights';
+import { monthTotals, categoryBreakdown, monthlySeries, buildAlerts, spendingRoom } from '../lib/insights';
+import { findTransferFixes } from '../lib/transfers';
+import type { TransferFix } from '../lib/transfers';
+import { SpendingRoomPanel } from '../components/SpendingRoomPanel';
+import { TransferFixBanner } from '../components/TransferFixBanner';
 import { AlertCard } from '../components/ui/AlertCard';
 
 const pct = (cur: number, prev: number) => (prev > 0 ? ((cur - prev) / prev) * 100 : null);
@@ -19,7 +23,7 @@ const pct = (cur: number, prev: number) => (prev > 0 ? ((cur - prev) / prev) * 1
 export function Dashboard() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-    const { user, transactions, deleteTransaction } = useFinanceiro();
+    const { user, transactions, identity, deleteTransaction, recategorize } = useFinanceiro();
 
     const month = monthKey(new Date());
     const data = useMemo(() => {
@@ -31,8 +35,20 @@ export function Dashboard() {
             series: monthlySeries(transactions, month, 6),
             alerts: buildAlerts(transactions, month),
             recent: transactions.slice(0, 8),
+            room: spendingRoom(transactions, month),
+            fixes: findTransferFixes(transactions, identity),
         };
-    }, [transactions, month]);
+    }, [transactions, month, identity]);
+
+    async function applyFixes(fixes: TransferFix[]) {
+        // As duas pontas de um par vão no mesmo commit: falha no meio não deixa metade corrigida
+        const grupos = new Map<string, TransferFix[]>();
+        for (const f of fixes) {
+            const chave = f.pairId ?? f.transaction.id;
+            grupos.set(chave, [...(grupos.get(chave) ?? []), f]);
+        }
+        await recategorize([...grupos.values()].map(g => g.map(f => ({ id: f.transaction.id, type: 'transfer' as const, category: f.category }))));
+    }
 
     function handleEdit(transaction: Transaction) {
         setEditingTransaction(transaction);
@@ -59,23 +75,27 @@ export function Dashboard() {
                 </>}
             />
 
+            <TransferFixBanner fixes={data.fixes} onApply={applyFixes} />
+
             {isEmptyMonth && (
                 <Link to="/import" className="glass glass-hover flex items-center gap-4 border-primary/25 p-5">
                     <div className="rounded-xl border border-primary/30 bg-primary/10 p-3 text-primary"><Upload size={22} /></div>
                     <div className="flex-1">
                         <p className="font-medium">Nada lançado neste mês ainda</p>
-                        <p className="text-sm text-text-muted">Suba o extrato OFX ou CSV dos seus bancos e o Fortuna categoriza tudo para você.</p>
+                        <p className="text-sm text-text-muted">Suba o extrato OFX, CSV ou PDF da Nubank dos seus bancos e o Fortuna categoriza tudo para você.</p>
                     </div>
                     <ArrowRight className="text-primary" size={20} />
                 </Link>
             )}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <KPICard title="saldo do mês" amount={data.cur.balance} icon={Activity} highlight hint="entradas − gastos − aportes" />
+                <KPICard title="saldo do mês" amount={data.cur.balance} icon={Activity} highlight hint="entradas − gastos − investido líquido" />
                 <KPICard title="entradas" amount={data.cur.income} icon={TrendingUp} variant="success" delta={pct(data.cur.income, data.prev.income)} hint="vs. mês anterior" />
                 <KPICard title="gastos" amount={data.cur.expense} icon={TrendingDown} variant="danger" delta={pct(data.cur.expense, data.prev.expense)} deltaGoodWhenUp={false} hint="vs. mês anterior" />
-                <KPICard title="investido" amount={data.cur.invested} icon={Wallet} variant="accent" hint="aportes no mês" />
+                <KPICard title="investido" amount={data.cur.invested} icon={Wallet} variant="accent" hint={data.cur.invested < 0 ? 'resgatou mais do que aplicou' : 'aportes − resgates'} />
             </div>
+
+            {!isEmptyMonth && data.room.daysLeft > 0 && <SpendingRoomPanel room={data.room} />}
 
             {data.alerts.length > 0 && (
                 <div className="grid gap-3 md:grid-cols-2">

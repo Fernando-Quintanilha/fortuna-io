@@ -51,6 +51,7 @@ export const INVESTMENT_CATEGORIES: Category[] = [
 export const TRANSFER_CATEGORIES: Category[] = [
     { label: 'Fatura do cartão', icon: Receipt },
     { label: 'Entre minhas contas', icon: ArrowLeftRight },
+    { label: 'Resgate de investimento', icon: PiggyBank },
 ];
 
 export function categoriesFor(type: TransactionType): Category[] {

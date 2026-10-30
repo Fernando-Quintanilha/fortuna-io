@@ -15,7 +15,7 @@ import { CategorySource, TransactionType } from '../types';
 type Override = Partial<Pick<ImportRow, 'type' | 'category' | 'categorySource' | 'selected'>>;
 type Filter = 'all' | 'uncertain' | 'duplicates';
 
-const ACCEPT = '.ofx,.csv,.txt';
+const ACCEPT = '.ofx,.csv,.txt,.pdf';
 
 const SOURCE_BADGE: Record<CategorySource, { label: string; cls: string }> = {
     user: { label: 'você', cls: 'border-primary/40 bg-primary/10 text-primary' },
@@ -29,7 +29,7 @@ const typesFor = (signed: number): TransactionType[] =>
     signed >= 0 ? ['income', 'transfer'] : ['expense', 'investment', 'transfer'];
 
 export function Import() {
-    const { user, transactions, classifier, importTransactions } = useFinanceiro();
+    const { user, transactions, classifier, identity, setIdentity, importTransactions } = useFinanceiro();
     const inputRef = useRef<HTMLInputElement>(null);
 
     const [statements, setStatements] = useState<ParsedStatement[]>([]);
@@ -43,9 +43,9 @@ export function Import() {
 
     // As linhas sugeridas são recalculadas; as edições do usuário ficam em `overrides`
     const rows = useMemo(() => {
-        const base = prepareImport(statements, classifier, transactions);
+        const base = prepareImport(statements, classifier, transactions, identity);
         return base.map(r => ({ ...r, ...overrides[r.key] }));
-    }, [statements, classifier, transactions, overrides]);
+    }, [statements, classifier, transactions, identity, overrides]);
 
     const visibleRows = useMemo(() => rows.filter(r =>
         filter === 'all' ||
@@ -84,6 +84,9 @@ export function Import() {
         });
         setErrors(failed);
         setParsing(false);
+        // O extrato em PDF traz o titular: guarda para reconhecer Pix entre as suas contas nos outros bancos
+        const titular = parsed.find(p => p.holder?.cpf)?.holder;
+        if (titular && !identity.cpf) setIdentity({ name: titular.name, cpf: titular.cpf });
     }
 
     function onDrop(e: DragEvent) {
@@ -164,7 +167,7 @@ export function Import() {
             <PageHeader
                 eyebrow="importar"
                 title="Importar extratos"
-                subtitle="Suba os extratos do mês (OFX ou CSV, de quantos bancos quiser). O Fortuna lê, categoriza e você só revisa."
+                subtitle="Suba os extratos do mês (OFX, CSV ou PDF da Nubank, de quantos bancos quiser). O Fortuna lê, categoriza, reconhece o que é transferência entre as suas contas e você só revisa."
             />
 
             {imported !== null && (
@@ -199,7 +202,7 @@ export function Import() {
                     {parsing ? <Loader2 className="animate-spin" size={26} /> : <Upload size={26} />}
                 </div>
                 <p className="font-medium">Arraste os arquivos aqui ou clique para escolher</p>
-                <p className="font-mono text-xs text-text-dim">.ofx · .csv — Nubank, Itaú, Inter, Bradesco, BB, Santander, C6, Caixa…</p>
+                <p className="font-mono text-xs text-text-dim">.ofx · .csv · .pdf (conta Nubank) — Nubank, Itaú, Inter, Bradesco, BB, Santander, C6, Caixa…</p>
             </div>
 
             <details className="glass px-5 py-4 text-sm text-text-muted">
@@ -207,7 +210,8 @@ export function Import() {
                 <ul className="mt-3 list-inside list-disc space-y-1.5">
                     <li>No app ou internet banking procure <b className="text-text-main">Extrato → Exportar</b> e escolha <b className="text-text-main">OFX</b> (preferido) ou CSV/Excel.</li>
                     <li>Para cartão de crédito, exporte a <b className="text-text-main">fatura</b> em OFX ou CSV.</li>
-                    <li>PDF ainda não é suportado. Pagamentos de fatura viram “Transferência” e ficam fora dos totais, então pode importar conta e cartão sem contar em dobro.</li>
+                    <li>PDF: por enquanto só o extrato da conta Nubank. Dos outros bancos, use OFX ou CSV.</li>
+                    <li>Pagamentos de fatura, Pix para você mesmo e resgates viram “Transferência” e ficam fora dos totais. Suba todos os bancos juntos: quando o mesmo valor sai de um e entra no outro, o Fortuna junta as duas pontas.</li>
                 </ul>
             </details>
 
@@ -308,7 +312,7 @@ export function Import() {
                                                     {badge.label}{r.categorySource === 'learned' && ` ${(r.confidence * 100).toFixed(0)}%`}
                                                 </span>
                                                 {r.status === 'exists' && <span className="chip border-white/15 text-text-dim">já importada</span>}
-                                                {r.status === 'possible-duplicate' && <span className="chip border-warning/40 text-warning" title="Já existe um lançamento manual parecido">possível duplicata</span>}
+                                                {r.status === 'possible-duplicate' && <span className="chip border-warning/40 text-warning" title="Já existe um lançamento parecido (manual ou importado de outro arquivo)">possível duplicata</span>}
                                             </div>
                                         </div>
                                         <span className={`text-right font-mono text-sm md:order-last ${r.signedAmount >= 0 ? 'text-success' : 'text-text-main'}`}>

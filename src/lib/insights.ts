@@ -1,17 +1,20 @@
 import type { Transaction } from '../types';
 import { formatCurrency, monthLabel, shiftMonth, todayISO } from './format';
 import { merchantKey } from './import/text';
+import { RESGATE } from './transfers';
 
 const soma = (txs: Transaction[]) => txs.reduce((s, t) => s + Math.round(t.amount * 100), 0) / 100;
 const despesas = (txs: Transaction[], mes: string) => txs.filter(t => t.type === 'expense' && t.date.slice(0, 7) === mes);
+const centavos = (v: number) => Math.round(v * 100) / 100;
 const diasNoMes = (mes: string) => { const [ano, numero] = mes.split('-').map(Number); return new Date(ano, numero, 0).getDate(); };
 
 export function monthTotals(txs: Transaction[], month: string): { income: number; expense: number; invested: number; balance: number } {
     const itens = txs.filter(t => t.date.slice(0, 7) === month);
     const income = soma(itens.filter(t => t.type === 'income'));
     const expense = soma(itens.filter(t => t.type === 'expense'));
-    const invested = soma(itens.filter(t => t.type === 'investment'));
-    return { income, expense, invested, balance: Math.round((income - expense - invested) * 100) / 100 };
+    // Investido líquido: aportes menos resgates (aplicar e resgatar no mesmo mês não é economia nem gasto)
+    const invested = centavos(soma(itens.filter(t => t.type === 'investment')) - soma(itens.filter(t => t.type === 'transfer' && t.category === RESGATE)));
+    return { income, expense, invested, balance: centavos(income - expense - invested) };
 }
 
 export interface CategoryStat { category: string; total: number; count: number; avgPrev: number; deltaPct: number | null; share: number }
@@ -70,9 +73,9 @@ export function cumulativeDaily(txs: Transaction[], month: string, today = today
 }
 
 export interface Recurring { merchant: string; label: string; category: string; avgAmount: number; months: number; lastDate: string; isNew: boolean }
-export function detectRecurring(txs: Transaction[], refMonth: string): Recurring[] {
+export function detectRecurring(txs: Transaction[], refMonth: string, type: 'expense' | 'income' = 'expense'): Recurring[] {
     const inicio = shiftMonth(refMonth, -5);
-    const historico = txs.filter(t => t.type === 'expense' && t.date.slice(0, 7) <= refMonth);
+    const historico = txs.filter(t => t.type === type && t.date.slice(0, 7) <= refMonth);
     const primeira = new Map([...agrupar(historico)].map(([key, itens]) => [key, itens.map(t => t.date).sort()[0]]));
     const resultado: Recurring[] = [];
     for (const [merchant, itens] of agrupar(historico.filter(t => t.date.slice(0, 7) >= inicio))) {
@@ -89,11 +92,16 @@ export function detectRecurring(txs: Transaction[], refMonth: string): Recurring
     return resultado.sort((a, b) => b.avgAmount - a.avgAmount);
 }
 
+const ALERTA_MINIMO = 50;
+const ALERTA_CRITICO = 300;
+
 export interface Alert { level: 'info' | 'warning' | 'critical'; title: string; detail: string }
 export function buildAlerts(txs: Transaction[], month: string, today = todayISO()): Alert[] {
     const alertas: Alert[] = [];
     for (const c of categoryBreakdown(txs, month)) {
-        if (c.deltaPct !== null && c.deltaPct > 25) alertas.push({ level: c.deltaPct > 60 ? 'critical' : 'warning',
+        // Variação percentual sobre valores pequenos é ruído: R$ 15 contra R$ 7 não merece alerta
+        const diferenca = c.total - c.avgPrev;
+        if (c.deltaPct !== null && c.deltaPct > 25 && diferenca >= ALERTA_MINIMO) alertas.push({ level: c.deltaPct > 60 && diferenca >= ALERTA_CRITICO ? 'critical' : 'warning',
             title: `Aumento em ${c.category}`, detail: `Gasto de ${formatCurrency(c.total)}, ${c.deltaPct.toFixed(0)}% acima da média de ${formatCurrency(c.avgPrev)} dos três meses anteriores.` });
     }
     for (const r of detectRecurring(txs, month).filter(r => r.isNew)) {
@@ -110,4 +118,40 @@ export function buildAlerts(txs: Transaction[], month: string, today = todayISO(
     if (totais.expense > totais.income) alertas.push({ level: 'critical', title: 'Gastos maiores que a receita',
         detail: `Despesas de ${formatCurrency(totais.expense)} superam a receita de ${formatCurrency(totais.income)} neste mês.` });
     return alertas;
+}
+
+export interface Commitment { label: string; category: string; amount: number }
+export interface SpendingRoom {
+    available: number; perDay: number; daysLeft: number;
+    income: number; expense: number; invested: number;
+    pendingBills: Commitment[]; pendingIncome: Commitment[];
+}
+
+// Recorrentes do mês anterior que ainda não apareceram neste mês
+// Conta por ocorrência: duas contas Vivo no mês passado e uma paga neste mês deixa uma pendente
+function pendentes(txs: Transaction[], month: string, type: 'expense' | 'income'): Commitment[] {
+    const anterior = shiftMonth(month, -1);
+    const doTipo = txs.filter(t => t.type === type);
+    const resultado: Commitment[] = [];
+    for (const r of detectRecurring(txs, anterior, type).filter(r => r.lastDate.slice(0, 7) === anterior)) {
+        const parecidas = (mes: string) => doTipo.filter(t => t.date.slice(0, 7) === mes && merchantKey(t.rawDescription || t.description) === r.merchant
+            && Math.abs(t.amount - r.avgAmount) <= r.avgAmount * 0.1 + 1e-8).length;
+        const faltam = parecidas(anterior) - parecidas(month);
+        for (let i = 0; i < faltam; i++) resultado.push({ label: r.label, category: r.category, amount: centavos(r.avgAmount) });
+    }
+    return resultado;
+}
+
+// Quanto ainda dá para gastar até o fim do mês sem fechar no vermelho:
+// entradas − gastos − investido líquido − contas recorrentes que ainda vão cair + receitas recorrentes que ainda vão entrar
+export function spendingRoom(txs: Transaction[], month: string, today = todayISO()): SpendingRoom {
+    const { income, expense, invested } = monthTotals(txs, month);
+    const pendingBills = pendentes(txs, month, 'expense');
+    const pendingIncome = pendentes(txs, month, 'income');
+    const total = (itens: Commitment[]) => itens.reduce((s, c) => s + c.amount, 0);
+    const available = centavos(income - expense - invested - total(pendingBills) + total(pendingIncome));
+    const ultimo = diasNoMes(month);
+    const daysLeft = month === today.slice(0, 7) ? ultimo - Number(today.slice(8, 10)) + 1 : month > today.slice(0, 7) ? ultimo : 0;
+    return { available, perDay: daysLeft && available > 0 ? centavos(available / daysLeft) : 0, daysLeft,
+        income, expense, invested, pendingBills, pendingIncome };
 }

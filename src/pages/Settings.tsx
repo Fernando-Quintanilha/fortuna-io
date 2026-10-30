@@ -1,14 +1,25 @@
 import { useMemo, useState } from 'react';
-import { Brain, Loader2, Wand2, Eye, EyeOff } from 'lucide-react';
+import { Brain, Loader2, Wand2, Eye, EyeOff, UserRound } from 'lucide-react';
 import { useFinanceiro } from '../hooks/useFinanceiro';
 import { usePrivacy } from '../contexts/PrivacyContext';
 import { Panel } from '../components/ui/Panel';
 import { PageHeader } from '../components/ui/PageHeader';
 import { iconFor, TYPE_LABEL } from '../lib/categories';
 import { StatementKind } from '../lib/import/parse';
+import { normalizeCpf } from '../lib/identity';
 
 export function Settings() {
-    const { transactions, classifier, editTransaction } = useFinanceiro();
+    const { transactions, classifier, editTransaction, identity, setIdentity } = useFinanceiro();
+    const [nome, setNome] = useState(identity.name ?? '');
+    const [cpf, setCpf] = useState(identity.cpf ? `•••.${identity.cpf.slice(0, 3)}.${identity.cpf.slice(3)}-••` : '');
+    const [identidadeMsg, setIdentidadeMsg] = useState<string | null>(null);
+
+    function salvarIdentidade() {
+        const digitos = cpf.trim() ? normalizeCpf(cpf) : undefined;
+        if (cpf.trim() && !digitos) { setIdentidadeMsg('Informe o CPF completo ou os 6 dígitos do meio.'); return; }
+        setIdentity({ ...(nome.trim() ? { name: nome.trim() } : {}), ...(digitos ? { cpf: digitos } : {}) });
+        setIdentidadeMsg('Salvo. O painel vai apontar o que é transferência entre as suas contas.');
+    }
     const { isVisible, toggleVisibility } = usePrivacy();
     const [running, setRunning] = useState(false);
     const [result, setResult] = useState<number | null>(null);
@@ -47,6 +58,21 @@ export function Settings() {
                 </button>
             </Panel>
 
+            <Panel title="quem é você">
+                <p className="mb-4 max-w-2xl text-sm text-text-muted">
+                    <UserRound size={14} className="mr-1.5 inline text-primary" />
+                    Com seu nome completo e CPF o Fortuna reconhece Pix e TED entre as suas próprias contas, que não são receita nem gasto.
+                    Fica só neste navegador, e do CPF guardamos apenas os 6 dígitos do meio (os que os bancos mostram no extrato).
+                    O extrato em PDF da Nubank preenche isso sozinho.
+                </p>
+                <div className="flex flex-col gap-3 md:flex-row">
+                    <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome completo como aparece no banco" aria-label="Nome completo" className="input flex-1" />
+                    <input value={cpf} onChange={e => setCpf(e.target.value)} placeholder="CPF" aria-label="CPF" inputMode="numeric" className="input md:w-56" />
+                    <button onClick={salvarIdentidade} className="btn-primary">Salvar</button>
+                </div>
+                {identidadeMsg && <p className="mt-2 font-mono text-xs text-text-muted">&gt; {identidadeMsg}</p>}
+            </Panel>
+
             <Panel
                 title="modelo de categorização"
                 action={<span className="font-mono text-[11px] text-text-muted">treinado com {classifier.trainingSize} exemplos</span>}
@@ -55,6 +81,8 @@ export function Settings() {
                     <Brain size={14} className="mr-1.5 inline text-primary" />
                     O modelo roda no seu navegador, sem custo e sem enviar dados para fora. Ele aprende toda vez que você
                     escolhe ou corrige uma categoria — na importação, no histórico ou ao lançar algo manualmente.
+                    Ele já vem com uma base de <span className="font-mono text-text-main">{classifier.seedSize}</span> estabelecimentos
+                    e serviços comuns no Brasil; qualquer correção sua passa na frente dela.
                 </p>
 
                 <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-stroke bg-bg/40 p-4">
