@@ -7,6 +7,7 @@ import { buildVotes, encodeVotes, parseCommunityModel } from '../lib/community';
 import type { CommunityEntry } from '../lib/community';
 
 export interface CommunityState {
+    uid: string | null;              // conta a que este estado se refere
     entries: CommunityEntry[];       // consenso recebido (todo mundo recebe, participando ou não)
     optIn: boolean;                  // esta pessoa envia os próprios votos (fonte: o documento no Firestore)
     setOptIn(on: boolean): Promise<void>;
@@ -106,5 +107,5 @@ export function useCommunity(user: User | null, transactions: Transaction[], loa
         }
     }
 
-    return { entries, optIn, setOptIn, shared: optIn ? Object.keys(votos).length : 0, error };
+    return { uid, entries, optIn, setOptIn, shared: optIn ? Object.keys(votos).length : 0, error };
 }

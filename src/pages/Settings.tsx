@@ -74,7 +74,8 @@ export function Settings() {
                 {identidadeMsg && <p className="mt-2 font-mono text-xs text-text-muted">&gt; {identidadeMsg}</p>}
             </Panel>
 
-            <CommunityPanel community={community} size={classifier.communitySize} />
+            {/* key: trocar de conta remonta o painel, sem herdar o "salvando" da conta anterior */}
+            <CommunityPanel key={community.uid ?? 'sem-conta'} community={community} size={classifier.communitySize} />
 
             <Panel
                 title="modelo de categorização"
