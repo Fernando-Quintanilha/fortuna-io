@@ -3,9 +3,11 @@
 // Não há endpoint público: sem o CRON_SECRET a função recusa, então ninguém força leituras repetidas da coleção.
 // Usa a conta de serviço em FIREBASE_SERVICE_ACCOUNT (JSON da chave).
 // Autocontida de propósito: importar arquivos de src/ sem extensão quebra no ESM da Vercel.
-import { cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+// O firebase-admin é carregado só depois de conferir o CRON_SECRET: sem senha a resposta é 401 mesmo que ele falhe,
+// e uma falha de carregamento aparece no log com a mensagem.
+// Sem firebase-admin/auth: ele carrega jwks-rsa → jose 6 (só ESM) e o require() derruba a função na Vercel
+// (ERR_REQUIRE_ESM, 31/10/2026). As contas são lidas pela API do Identity Toolkit (accounts:lookup), a mesma que o
+// getUsers() do SDK usa, com o token da própria conta de serviço.
 
 export const MIN_USERS = 5;                 // estabelecimento só entra com votos de pelo menos 5 pessoas
 export const MIN_AGREEMENT = 0.7;           // e 70% delas concordando
@@ -71,17 +73,20 @@ export function sanitizeVotes(raw: unknown): Votes {
 
 type Contagem = Map<string, Map<string, number>>; // chave -> categoria -> pessoas
 
-// Soma os votos de uma pessoa na contagem; chave nova além do teto é ignorada (memória limitada)
-export function countVotes(contagem: Contagem, votos: Votes) {
+// Soma os votos de uma pessoa na contagem. Chave nova além do teto não cabe (memória limitada):
+// devolve false para quem chamou não publicar um consenso incompleto.
+export function countVotes(contagem: Contagem, votos: Votes): boolean {
+    let coube = true;
     for (const [key, valor] of Object.entries(votos)) {
         let opcoes = contagem.get(key);
         if (!opcoes) {
-            if (contagem.size >= MAX_KEYS) continue;
+            if (contagem.size >= MAX_KEYS) { coube = false; continue; }
             opcoes = new Map<string, number>();
             contagem.set(key, opcoes);
         }
         opcoes.set(valor, (opcoes.get(valor) ?? 0) + 1);
     }
+    return coube;
 }
 
 export function aggregateVotes(porPessoa: Votes[]): CommunityEntry[] {
@@ -102,6 +107,28 @@ export function consensus(contagem: Contagem): CommunityEntry[] {
     return entries.sort((a, b) => b.users - a.users || a.key.localeCompare(b.key)).slice(0, MAX_ENTRIES);
 }
 
+// Contas do Firebase Auth pela API REST (accounts:lookup), no formato que trustedAccount usa.
+// Conta que não existe simplesmente não volta (igual ao getUsers do SDK). Até 100 uids por chamada.
+export interface Conta { uid: string; disabled: boolean; providerData: unknown[]; metadata: { creationTime: string } }
+export async function lookupUsers(uids: string[], projectId: string, token: string, buscar: typeof fetch = fetch): Promise<Conta[]> {
+    if (!uids.length) return [];
+    if (uids.length > 100) throw new Error('accounts:lookup aceita até 100 contas por chamada');
+    const r = await buscar(`https://identitytoolkit.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/accounts:lookup`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ localId: uids }),
+        signal: AbortSignal.timeout(20000),
+    });
+    if (!r.ok) throw new Error(`accounts:lookup respondeu HTTP ${r.status}`);
+    const d = await r.json() as { users?: { localId?: string; disabled?: boolean; providerUserInfo?: unknown[]; createdAt?: string }[] };
+    return (d.users ?? []).filter(u => typeof u.localId === 'string').map(u => ({
+        uid: u.localId as string,
+        disabled: u.disabled === true,
+        providerData: Array.isArray(u.providerUserInfo) ? u.providerUserInfo : [], // anônima: sem provedor
+        metadata: { creationTime: new Date(Number(u.createdAt)).toUTCString() },  // createdAt = milissegundos (texto)
+    }));
+}
+
 // Conta não anônima, ativa e com idade mínima
 export function trustedAccount(user: { disabled: boolean; providerData: unknown[]; metadata: { creationTime: string } }, agora = Date.now()) {
     const criada = Date.parse(user.metadata.creationTime);
@@ -115,14 +142,22 @@ export async function GET(request: Request): Promise<Response> {
     const credencial = process.env.FIREBASE_SERVICE_ACCOUNT;
     if (!credencial) return new Response('aprendizado coletivo não configurado', { status: 503 });
     try {
-        if (!getApps().length) initializeApp({ credential: cert(JSON.parse(credencial)) });
+        const [{ cert, getApps, initializeApp }, { FieldValue, getFirestore }] = await Promise.all([
+            import('firebase-admin/app'), import('firebase-admin/firestore')]);
+        const conta = JSON.parse(credencial) as { project_id?: string };
+        if (!conta.project_id) return new Response('conta de serviço sem project_id', { status: 503 });
+        const credencialAdmin = cert(conta as Parameters<typeof cert>[0]);
+        if (!getApps().length) initializeApp({ credential: credencialAdmin });
         const db = getFirestore();
+        const contas = async (uids: string[]) =>
+            lookupUsers(uids, conta.project_id as string, (await credencialAdmin.getAccessToken()).access_token);
         // Lê em páginas, conta os votos de contas confiáveis e descarta a página
         const contagem: Contagem = new Map();
         let lidos = 0;
         let confiaveisTotal = 0;
         let ultimo: string | undefined;
         let completo = false;
+        let coube = true;
         while (lidos < MAX_DOCS) {
             let consulta = db.collection('communityVotes').where('optIn', '==', true).orderBy('__name__').limit(PAGINA);
             if (ultimo) consulta = consulta.startAfter(ultimo);
@@ -130,19 +165,21 @@ export async function GET(request: Request): Promise<Response> {
             if (!docs.length) { completo = true; break; }
             lidos += docs.length;
             ultimo = docs[docs.length - 1].id;
-            const { users } = await getAuth().getUsers(docs.slice(0, 100).map(d => ({ uid: d.id })));
-            const resto = docs.length > 100 ? (await getAuth().getUsers(docs.slice(100).map(d => ({ uid: d.id })))).users : [];
+            const users = await contas(docs.slice(0, 100).map(d => d.id));
+            const resto = docs.length > 100 ? await contas(docs.slice(100).map(d => d.id)) : [];
             const confiaveis = new Set([...users, ...resto].filter(u => trustedAccount(u)).map(u => u.uid));
             for (const d of docs) {
                 if (!confiaveis.has(d.id)) continue;
                 confiaveisTotal++;
-                countVotes(contagem, sanitizeVotes(d.get('votes')));
+                if (!countVotes(contagem, sanitizeVotes(d.get('votes')))) coube = false;
             }
             if (docs.length < PAGINA) { completo = true; break; }
         }
-        // Leitura cortada pelo orçamento: não publica um consenso parcial, mantém o modelo anterior
-        if (!completo) {
-            console.error('community-aggregate', `leitura incompleta: orçamento de ${MAX_DOCS} documentos atingido`);
+        // Leitura cortada pelo orçamento ou contagem sem espaço: não publica um consenso parcial, mantém o modelo anterior
+        if (!completo || !coube) {
+            console.error('community-aggregate', !completo
+                ? `leitura incompleta: orçamento de ${MAX_DOCS} documentos atingido`
+                : `contagem incompleta: mais de ${MAX_KEYS} estabelecimentos distintos`);
             return new Response('leitura incompleta, modelo anterior mantido', { status: 507 });
         }
         const entries = consensus(contagem);

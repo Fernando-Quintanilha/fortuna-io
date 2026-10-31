@@ -3,7 +3,7 @@ import type { Transaction } from '../types';
 import { BUSINESS_WORDS, buildVotes, COMMUNITY_CATEGORIES, COMMUNITY_KEY, eligibleForCommunity, encodeVotes, FIRST_NAMES, MAX_VOTES_CHARS,
     parseCommunityModel } from './community';
 import { aggregateVotes, BUSINESS_WORDS as MARCAS_SERVIDOR, CATEGORIES, countVotes, FIRST_NAMES as NOMES_SERVIDOR, MAX_ENTRIES, MAX_KEYS,
-    MAX_VOTES_CHARS as LIMITE_SERVIDOR, sanitizeVotes, trustedAccount } from '../../api/community-aggregate';
+    MAX_VOTES_CHARS as LIMITE_SERVIDOR, lookupUsers, sanitizeVotes, trustedAccount } from '../../api/community-aggregate';
 import { EXPENSE_CATEGORIES } from './categories';
 import { Classifier } from './import/classifier';
 import { shortDescription } from './format';
@@ -90,7 +90,7 @@ describe('aprendizado coletivo · servidor', () => {
     it('a contagem em memória tem teto de estabelecimentos distintos e segue contando os que já entraram', () => {
         const contagem = new Map<string, Map<string, number>>();
         for (let i = 0; i < MAX_KEYS; i++) contagem.set(`loja ${i}`, new Map([['Lazer', 1]]));
-        countVotes(contagem, { 'loja nova': 'Lazer', 'loja 0': 'Lazer' });
+        expect(countVotes(contagem, { 'loja nova': 'Lazer', 'loja 0': 'Lazer' })).toBe(false); // avisa: não publicar
         expect(contagem.size).toBe(MAX_KEYS);
         expect(contagem.get('loja 0')?.get('Lazer')).toBe(2);
     });
@@ -102,6 +102,29 @@ describe('aprendizado coletivo · servidor', () => {
         expect(trustedAccount(conta(5), agora)).toBe(false);
         expect(trustedAccount(conta(40, { providerData: [] }), agora)).toBe(false);
         expect(trustedAccount(conta(40, { disabled: true }), agora)).toBe(false);
+    });
+    it('contas lidas pela API REST (sem firebase-admin/auth) seguem a mesma regra de confiança', async () => {
+        const agora = Date.parse('2026-10-30T00:00:00Z');
+        const ms = (dias: number) => String(agora - dias * 86400000);
+        let pedido: { url: string; corpo: unknown; auth: string | null } | undefined;
+        const buscar = (async (url: string, init: RequestInit) => {
+            pedido = { url, corpo: JSON.parse(String(init.body)), auth: new Headers(init.headers).get('authorization') };
+            return Response.json({ users: [
+                { localId: 'velha', createdAt: ms(40), providerUserInfo: [{ providerId: 'google.com' }] },
+                { localId: 'nova', createdAt: ms(5), providerUserInfo: [{ providerId: 'password' }] },
+                { localId: 'anonima', createdAt: ms(40) },
+                { localId: 'desativada', createdAt: ms(40), disabled: true, providerUserInfo: [{}] },
+            ] });
+        }) as unknown as typeof fetch;
+        const contas = await lookupUsers(['velha', 'nova', 'anonima', 'desativada', 'apagada'], 'meu-projeto', 'tok', buscar);
+        expect(pedido?.url).toBe('https://identitytoolkit.googleapis.com/v1/projects/meu-projeto/accounts:lookup');
+        expect(pedido?.corpo).toEqual({ localId: ['velha', 'nova', 'anonima', 'desativada', 'apagada'] });
+        expect(pedido?.auth).toBe('Bearer tok');
+        expect(contas.filter(c => trustedAccount(c, agora)).map(c => c.uid)).toEqual(['velha']); // 'apagada' nem volta
+        await expect(lookupUsers(Array.from({ length: 101 }, (_, i) => `u${i}`), 'p', 't', buscar)).rejects.toThrow();
+        expect(await lookupUsers([], 'p', 't', buscar)).toEqual([]);
+        const falha = (async () => new Response('x', { status: 403 })) as unknown as typeof fetch;
+        await expect(lookupUsers(['a'], 'p', 't', falha)).rejects.toThrow(/403/);
     });
     it('o navegador revalida o consenso e a sugestão da comunidade vai para revisão, abaixo da escolha pessoal', () => {
         const entries = parseCommunityModel({ entries: [
