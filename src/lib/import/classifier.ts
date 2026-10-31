@@ -3,6 +3,7 @@ import { categoriesFor } from '../categories';
 import type { StatementKind } from './parse';
 import { merchantKey, merchantText, normalizeText, tokenize } from './text';
 import { SEED } from './seed';
+import type { CommunityEntry } from '../community';
 
 export type SeedExample = { description: string; type: TransactionType; category: string };
 
@@ -82,13 +83,20 @@ class Bayes {
 export class Classifier {
     readonly trainingSize: number;
     readonly seedSize: number;
+    readonly communitySize: number;
+    // Consenso de várias pessoas (aprendizado coletivo), por estabelecimento exato
+    private coletivo = new Map<string, { type: TransactionType; category: string }>();
     private memoria = new Map<string, Map<string, LearnedMerchant>>();
     private pessoal = new Bayes();
     // Base de partida fora do Bayes: o vocabulário grande dela diluiria o que o usuário ensinou com poucos exemplos,
     // e palavras soltas ("conta", "caixa") dariam falso positivo. Vale só o nome do estabelecimento no início da descrição.
     private base: { prefixo: string; type: TransactionType; category: string }[] = [];
 
-    private constructor(transactions: Transaction[], seed: SeedExample[]) {
+    private constructor(transactions: Transaction[], seed: SeedExample[], community: CommunityEntry[]) {
+        for (const e of community) {
+            if (categoriesFor(e.type).some(c => c.label === e.category)) this.coletivo.set(e.key, { type: e.type, category: e.category });
+        }
+        this.communitySize = this.coletivo.size;
         for (const e of seed) {
             const prefixo = merchantText(e.description);
             if (prefixo.length >= 4) this.base.push({ prefixo, type: e.type, category: e.category });
@@ -99,6 +107,7 @@ export class Classifier {
         for (const t of transactions) {
             if (!categoriesFor(t.type).some(c => c.label === t.category)) continue;
             const manual = t.categorySource === 'user' || (!t.categorySource && t.source !== 'import');
+            // Sugestão da comunidade ('community') não confirmada fica de fora: não vira aprendizado pessoal
             const peso = manual ? 1 : t.categorySource === 'rule' || t.categorySource === 'learned' ? 0.25 : 0;
             if (!peso) continue;
             tamanho++;
@@ -118,14 +127,16 @@ export class Classifier {
     }
 
     // seed: base de partida embutida no app; os testes passam [] para isolar o que vem só do usuário
-    static train(transactions: Transaction[], seed: SeedExample[] = SEED): Classifier { return new Classifier(transactions, seed); }
+    static train(transactions: Transaction[], seed: SeedExample[] = SEED, community: CommunityEntry[] = []): Classifier {
+        return new Classifier(transactions, seed, community);
+    }
 
     learnedMerchants(): LearnedMerchant[] {
         return [...this.memoria.values()].map(opcoes => ({ ...[...opcoes.values()].sort((a, b) => b.count - a.count)[0] }))
             .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
     }
 
-    // Ordem: memória pessoal > regras fixas > modelo pessoal > estabelecimento da base > "Outros"
+    // Ordem: memória pessoal > regras fixas > modelo pessoal > consenso coletivo > estabelecimento da base > "Outros"
     predict(description: string, signedAmount: number, kind: StatementKind): Prediction {
         const opcoes = [...(this.memoria.get(merchantKey(description))?.values() ?? [])]
             .filter(v => permitido(v.type, signedAmount)).sort((a, b) => b.count - a.count);
@@ -142,6 +153,9 @@ export class Classifier {
         }
         const pessoal = this.pessoal.prever(description, signedAmount);
         if (pessoal) return { ...pessoal, source: 'learned' };
+        // Confiança abaixo de 0,6 de propósito: a sugestão da comunidade cai em "incertas" para a pessoa revisar
+        const coletivo = this.coletivo.get(merchantKey(description));
+        if (coletivo && permitido(coletivo.type, signedAmount)) return { ...coletivo, source: 'community', confidence: 0.55 };
         const estabelecimento = `${merchantText(description)} `;
         const conhecido = this.base.find(b => permitido(b.type, signedAmount) && estabelecimento.startsWith(`${b.prefixo} `));
         // Conta como regra: não é aprendizado do usuário

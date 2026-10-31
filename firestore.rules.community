@@ -1,0 +1,38 @@
+// Trecho para colar nas regras do Firestore (console do Firebase → Firestore → Regras),
+// dentro de `match /databases/{database}/documents { ... }`, junto das regras que já existem.
+
+    // Votos do aprendizado coletivo: só o dono lê e escreve o próprio documento.
+    // optIn é o consentimento: com ele falso, o documento não aceita votos (aba antiga não reativa).
+    // rev é a versão do consentimento: ligar ou desligar exige rev = atual + 1, então uma escolha antiga
+    // que chega atrasada (aparelho sem rede) é recusada em vez de desfazer a mais nova.
+    // votes é um texto "chave=índice;" (só letras e espaços na chave, índice de 0 a 14), com tamanho limitado.
+    match /communityVotes/{uid} {
+      function dono() {
+        return request.auth != null && request.auth.uid == uid
+          && request.auth.token.firebase.sign_in_provider != 'anonymous';
+      }
+      function formato() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['optIn', 'votes', 'rev', 'updatedAt'])
+          && d.optIn is bool && d.rev is int && d.votes is string && d.votes.size() <= 32000
+          && d.votes.matches('([a-z][a-z ]{2,58}[a-z]=([0-9]|1[0-4]);)*')
+          && d.updatedAt == request.time
+          && (d.optIn == true || d.votes == '');
+      }
+      allow read, delete: if dono();
+      allow create: if dono() && formato() && request.resource.data.rev == 1;
+      // Documento sem rev (formato antigo) conta como versão 0, então sempre dá para sair
+      allow update: if dono() && formato() && (
+        // envio de votos: consentimento vigente e na mesma versão
+        (resource.data.optIn == true && request.resource.data.optIn == true
+          && request.resource.data.rev == resource.data.get('rev', 0))
+        // troca do consentimento: sempre a partir da versão atual
+        || (request.resource.data.optIn != resource.data.optIn
+          && request.resource.data.rev == resource.data.get('rev', 0) + 1));
+    }
+
+    // Consenso gerado uma vez por dia pela tarefa da Vercel (conta de serviço); o app só lê.
+    match /community/{doc} {
+      allow read: if request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous';
+      allow write: if false;
+    }

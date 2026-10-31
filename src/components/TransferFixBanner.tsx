@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowLeftRight, Loader2 } from 'lucide-react';
 import { SecureValue } from './SecureValue';
-import { formatDate } from '../lib/format';
+import { formatDate, shortDescription } from '../lib/format';
 import type { TransferFix } from '../lib/transfers';
 
 interface Props {
@@ -44,9 +44,9 @@ export function TransferFixBanner({ fixes, onApply }: Props) {
                     {fixes.map(f => (
                         <li key={f.transaction.id} className="flex items-center gap-3 py-2 text-sm">
                             <span className="font-mono text-xs text-text-dim">{formatDate(f.transaction.date)}</span>
-                            <span className="min-w-0 flex-1 truncate" title={f.transaction.description}>{f.transaction.description}</span>
+                            <span className="min-w-0 flex-1 truncate" title={f.transaction.description}>{shortDescription(f.transaction.description)}</span>
                             <span className="hidden font-mono text-[11px] text-text-dim md:inline">{f.reason} → {f.category}</span>
-                            <span className="font-mono text-xs"><SecureValue value={f.transaction.amount} /></span>
+                            <span className="shrink-0 font-mono text-xs"><SecureValue value={f.transaction.amount} /></span>
                         </li>
                     ))}
                 </ul>

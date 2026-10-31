@@ -7,9 +7,10 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { iconFor, TYPE_LABEL } from '../lib/categories';
 import { StatementKind } from '../lib/import/parse';
 import { normalizeCpf } from '../lib/identity';
+import { CommunityPanel } from '../components/CommunityPanel';
 
 export function Settings() {
-    const { transactions, classifier, editTransaction, identity, setIdentity } = useFinanceiro();
+    const { transactions, classifier, editTransaction, identity, setIdentity, community } = useFinanceiro();
     const [nome, setNome] = useState(identity.name ?? '');
     const [cpf, setCpf] = useState(identity.cpf ? `•••.${identity.cpf.slice(0, 3)}.${identity.cpf.slice(3)}-••` : '');
     const [identidadeMsg, setIdentidadeMsg] = useState<string | null>(null);
@@ -72,6 +73,8 @@ export function Settings() {
                 </div>
                 {identidadeMsg && <p className="mt-2 font-mono text-xs text-text-muted">&gt; {identidadeMsg}</p>}
             </Panel>
+
+            <CommunityPanel community={community} size={classifier.communitySize} />
 
             <Panel
                 title="modelo de categorização"

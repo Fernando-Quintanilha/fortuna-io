@@ -5,7 +5,8 @@
 export type TransactionType = 'income' | 'expense' | 'investment' | 'transfer';
 
 // De onde veio a categoria: escolhida pelo usuário, regra fixa ou modelo aprendido
-export type CategorySource = 'user' | 'rule' | 'learned' | 'fallback';
+// community: sugestão do consenso coletivo, não confirmada pela pessoa (não entra no treino pessoal)
+export type CategorySource = 'user' | 'rule' | 'learned' | 'community' | 'fallback';
 
 export interface Transaction {
     id: string;

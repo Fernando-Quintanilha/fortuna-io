@@ -21,6 +21,7 @@ const SOURCE_BADGE: Record<CategorySource, { label: string; cls: string }> = {
     user: { label: 'você', cls: 'border-primary/40 bg-primary/10 text-primary' },
     learned: { label: 'aprendido', cls: 'border-accent/30 bg-accent/10 text-accent' },
     rule: { label: 'regra', cls: 'border-white/15 bg-white/5 text-text-muted' },
+    community: { label: 'comunidade', cls: 'border-accent/30 bg-transparent text-accent' },
     fallback: { label: '? revisar', cls: 'border-warning/40 bg-warning/10 text-warning' },
 };
 

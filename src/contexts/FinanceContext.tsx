@@ -12,6 +12,9 @@ import { categoriesFor } from '../lib/categories';
 import { parseDate } from '../lib/import/text';
 import { loadIdentity, saveIdentity } from '../lib/identity';
 import type { Identity } from '../lib/identity';
+import { SEED } from '../lib/import/seed';
+import { useCommunity } from '../hooks/useCommunity';
+import type { CommunityState } from '../hooks/useCommunity';
 
 interface FinanceValue {
     user: User | null; transactions: Transaction[]; summary: FinancialSummary; loading: boolean;
@@ -19,6 +22,8 @@ interface FinanceValue {
     // Titular (nome e CPF mascarado): reconhece Pix entre as próprias contas
     identity: Identity;
     setIdentity(identity: Identity): void;
+    // Aprendizado coletivo (opcional): consenso de várias pessoas por estabelecimento
+    community: CommunityState;
     addTransaction(t: Omit<Transaction, 'id' | 'createdAt'>): Promise<void>;
     editTransaction(id: string, t: Partial<Transaction>): Promise<void>;
     deleteTransaction(id: string): Promise<void>;
@@ -69,7 +74,8 @@ export function FinanceProvider({ children }: { children: ReactNode }): JSX.Elem
         return () => { versao++; usuarioAtual.current = null; cancelarAuth(); cancelarExtrato?.(); };
     }, []);
 
-    const classifier = useMemo(() => Classifier.train(transactions), [transactions]);
+    const community = useCommunity(user, transactions, carregando);
+    const classifier = useMemo(() => Classifier.train(transactions, SEED, community.entries), [transactions, community.entries]);
     const identity = useMemo<Identity>(() => ({ ...identidadeSalva, name: identidadeSalva.name || user?.displayName || undefined }), [identidadeSalva, user]);
     function setIdentity(nova: Identity) {
         if (!user) return;
@@ -179,7 +185,7 @@ export function FinanceProvider({ children }: { children: ReactNode }): JSX.Elem
         });
     }
     return <FinanceContext.Provider value={{ user, transactions, summary, loading: carregando || operacoes > 0,
-        classifier, identity, setIdentity, addTransaction, editTransaction, deleteTransaction, recategorize, importTransactions }}>{children}</FinanceContext.Provider>;
+        classifier, identity, setIdentity, community, addTransaction, editTransaction, deleteTransaction, recategorize, importTransactions }}>{children}</FinanceContext.Provider>;
 }
 
 export function useFinanceContext(): FinanceValue {

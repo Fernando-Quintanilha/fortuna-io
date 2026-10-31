@@ -32,3 +32,9 @@ export function todayISO() {
     const d = new Date();
     return `${monthKey(d)}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+// "TIM S A - 02.421.421/0001-11 - ITAÚ UNIBANCO..." -> "TIM S A": corta no CPF/CNPJ e nos dados bancários
+export function shortDescription(description: string) {
+    const curta = description.split(/\s+-\s+(?=[•*\d]{2,3}[.\d•*]*[./-])|\s+-\s+(?=.*\(\d{3,4}\)\s*Ag[eê]ncia)/)[0].trim();
+    return curta || description;
+}
