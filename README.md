@@ -1,16 +1,47 @@
-# React + Vite
+# Fortuna.io
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Mobile-first personal finance app. Import your bank statements, let it categorize the transactions, and see how much you can still spend this month.
 
-Currently, two official plugins are available:
+**Live:** https://fortuna-io.vercel.app
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Features
 
-## React Compiler
+- **Statement import** (CSV, OFX and PDF), including Nubank account PDFs parsed in the browser with pdf.js
+- **Automatic categorization** by merchant, with optional community learning: anonymous merchant → category votes aggregated daily by a serverless cron job
+- **Smart transfers:** Pix between your own accounts is treated as a transfer, and investment redemptions are deducted from the invested amount instead of counting as income
+- **"How much can I still spend"** panel for the current month
+- **Insights and charts** by category and period
+- **Privacy mode** that hides amounts on screen, and installable as a PWA
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Stack
 
-## Expanding the ESLint configuration
+- React 19, TypeScript, Vite, Tailwind CSS 4
+- Firebase (Auth, Firestore) on the client, `firebase-admin` in Vercel Functions (`api/`)
+- Recharts for charts, pdf.js for statement parsing
+- Vitest for tests, ESLint
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Running locally
+
+```bash
+npm install
+npm run dev
+```
+
+Create a `.env` with your own Firebase web config before starting (never commit it).
+
+```bash
+npm test          # unit tests
+npm run lint
+npm run typecheck
+npm run build
+```
+
+## Project structure
+
+```
+api/           Vercel serverless functions (community aggregation cron)
+src/pages/     Dashboard, Transactions, Import, Insights, Wallet, Settings
+src/services/  Firebase auth and access
+src/lib/       Pure logic: categories, transfers, insights, community learning
+src/lib/import Statement parsers (CSV, OFX, PDF) and the transaction classifier
+```
